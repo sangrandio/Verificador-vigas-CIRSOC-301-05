@@ -1,0 +1,376 @@
+<div style="max-width:900px; margin:0 auto; font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif; color:#1a1a18; padding:1.5rem;">
+
+<style>
+  .vv-card{background:#fff;border:1px solid #e5e3da;border-radius:12px;padding:1rem 1.25rem;}
+  .vv-input-row{display:flex;flex-wrap:wrap;gap:12px;margin-bottom:10px;}
+  .vv-field{display:flex;flex-direction:column;gap:4px;font-size:13px;color:#5b5952;flex:1;min-width:120px;}
+  .vv-field input, .vv-field select{padding:7px 8px;border:1px solid #d8d6cc;border-radius:8px;font-size:14px;background:#fff;color:#1a1a18;}
+  .vv-btn{padding:10px 18px;border-radius:8px;border:1px solid #1a1a18;background:#1a1a18;color:#fff;font-size:14px;cursor:pointer;font-weight:500;}
+  .vv-btn.secondary{background:#fff;color:#1a1a18;}
+  .vv-btn:hover{opacity:0.85;}
+  .vv-metric{border-radius:12px;padding:14px 16px;}
+  .vv-metric .lbl{font-size:13px;}
+  .vv-metric .val{font-size:26px;font-weight:600;margin:4px 0;}
+  .vv-metric .st{font-size:12px;}
+  .vv-ok{background:#e8f3e3;} .vv-ok .lbl,.vv-ok .val,.vv-ok .st{color:#2f5d1f;}
+  .vv-bad{background:#fbe9e6;} .vv-bad .lbl,.vv-bad .val,.vv-bad .st{color:#8a2c1f;}
+  .vv-warn{background:#f4f1e8;} .vv-warn .lbl,.vv-warn .val,.vv-warn .st{color:#5b5952;}
+  h1.vv-h{font-size:20px;font-weight:600;margin:0 0 4px;}
+  h2.vv-h{font-size:15px;font-weight:600;margin:0 0 10px;}
+  table.vv-t{width:100%;border-collapse:collapse;font-size:13px;}
+  table.vv-t th,table.vv-t td{padding:5px 8px;text-align:right;border-bottom:1px solid #eee;}
+  table.vv-t th:first-child,table.vv-t td:first-child{text-align:left;}
+  table.vv-t tr.vv-t-ok{background:#eef7ea;}
+</style>
+
+<h1 class="vv-h">Verificador de vigas de acero &mdash; CIRSOC 301-05</h1>
+<p style="font-size:13px;color:#8a887f;margin:0 0 1.25rem;">Herramienta de uso interno &middot; Baleal Ingenier&iacute;a. Perfiles IPN con datos oficiales CIRSOC/IRAM. Solo perfiles compactos.</p>
+
+<div class="vv-card" style="margin-bottom:1rem;">
+  <h2 class="vv-h">1&ndash;4. Datos de entrada</h2>
+
+  <div class="vv-input-row">
+    <div class="vv-field"><label>Luz L (m)</label><input type="number" id="in_L" value="6" step="0.01"></div>
+    <div class="vv-field"><label>Ancho de influencia total (m)</label><input type="number" id="in_b" value="2" step="0.01"></div>
+    <div class="vv-field"><label>Tipo de apoyo</label>
+      <select id="in_apoyo">
+        <option value="art-art">Articulado-articulado</option>
+        <option value="emp-emp">Empotrado-empotrado</option>
+        <option value="emp-art">Empotrado-articulado</option>
+        <option value="voladizo">Voladizo</option>
+      </select>
+    </div>
+    <div class="vv-field"><label>Lb no arriostrada (m)</label><input type="number" id="in_Lb" value="" step="0.01" placeholder="= L si vac&iacute;o"></div>
+  </div>
+
+  <div class="vv-input-row">
+    <div class="vv-field"><label>Carga permanente D (kN/m&sup2;)</label><input type="number" id="in_D" value="0.5" step="0.01"></div>
+    <div class="vv-field"><label>Sobrecarga L (kN/m&sup2;)</label><input type="number" id="in_Lc" value="3" step="0.01"></div>
+    <div class="vv-field"><label>L/xxx admisible flecha</label><input type="number" id="in_Lsobre" value="250" step="1"></div>
+  </div>
+  <p style="font-size:12px;color:#8a887f;margin:-2px 0 10px;">El peso propio del perfil (kg/m de la tabla) se suma autom&aacute;ticamente a D &mdash; no hace falta cargarlo.</p>
+
+  <div class="vv-input-row">
+    <div class="vv-field"><label>Acero</label>
+      <select id="in_acero">
+        <option value="A36">A36 (Fy=25.3 kN/cm&sup2;)</option>
+        <option value="F24">F24 (Fy=24.0 kN/cm&sup2;)</option>
+        <option value="SAE1010">SAE1010 (Fy=23.5 kN/cm&sup2;)</option>
+      </select>
+    </div>
+    <div class="vv-field"><label>Perfil IPN</label><select id="in_tamano"></select></div>
+  </div>
+
+  <div style="display:flex; gap:10px; margin-top:6px;">
+    <button class="vv-btn" onclick="calcularYMostrar()">Calcular</button>
+    <button class="vv-btn secondary" onclick="buscarOptimo()">Buscar perfil &oacute;ptimo</button>
+  </div>
+</div>
+
+<div id="dashboard"></div>
+<div id="tabla_optimo" style="margin-top:1rem;"></div>
+
+<script>
+// ================= DB DE PERFILES (valores oficiales CIRSOC/IRAM) =================
+const IPN = {
+  "80":  {h:8.0,bf:4.2,tf:0.59,hw:5.9,tw:0.39,Ag:7.57,peso:5.94,Ix:77.8,Sx:19.5,rx:3.20,Zx:22.8,Iy:6.29,Sy:3.00,ry:0.91,Zy:4.93},
+  "100": {h:10.0,bf:5.0,tf:0.68,hw:7.5,tw:0.45,Ag:10.6,peso:8.34,Ix:171,Sx:34.2,rx:4.01,Zx:39.8,Iy:12.2,Sy:4.88,ry:1.07,Zy:7.32},
+  "120": {h:12.0,bf:5.8,tf:0.77,hw:9.2,tw:0.51,Ag:14.2,peso:11.1,Ix:328,Sx:54.7,rx:4.81,Zx:63.6,Iy:21.5,Sy:7.41,ry:1.23,Zy:12.24},
+  "140": {h:14.0,bf:6.6,tf:0.86,hw:10.9,tw:0.57,Ag:18.2,peso:14.3,Ix:573,Sx:81.9,rx:5.61,Zx:95.4,Iy:35.2,Sy:10.7,ry:1.40,Zy:17.70},
+  "160": {h:16.0,bf:7.4,tf:0.95,hw:12.5,tw:0.63,Ag:22.8,peso:17.9,Ix:935,Sx:117,rx:6.40,Zx:136,Iy:54.7,Sy:14.8,ry:1.55,Zy:24.55},
+  "180": {h:18.0,bf:8.2,tf:1.04,hw:14.2,tw:0.69,Ag:27.9,peso:21.9,Ix:1450,Sx:161,rx:7.20,Zx:187,Iy:81.3,Sy:19.8,ry:1.71,Zy:33.00},
+  "200": {h:20.0,bf:9.0,tf:1.13,hw:15.9,tw:0.75,Ag:33.4,peso:26.2,Ix:2140,Sx:214,rx:8.00,Zx:250,Iy:117,Sy:26.0,ry:1.87,Zy:43.16},
+  "220": {h:22.0,bf:9.8,tf:1.22,hw:17.6,tw:0.81,Ag:39.5,peso:31.1,Ix:3060,Sx:278,rx:8.80,Zx:324,Iy:162,Sy:33.1,ry:2.02,Zy:55.21},
+  "240": {h:24.0,bf:10.6,tf:1.31,hw:19.2,tw:0.87,Ag:46.1,peso:36.2,Ix:4250,Sx:354,rx:9.59,Zx:412,Iy:221,Sy:41.7,ry:2.20,Zy:69.37},
+  "260": {h:26.0,bf:11.3,tf:1.41,hw:20.8,tw:0.94,Ag:53.3,peso:41.9,Ix:5740,Sx:442,rx:10.4,Zx:514,Iy:288,Sy:51.0,ry:2.32,Zy:85.11},
+  "280": {h:28.0,bf:11.9,tf:1.52,hw:22.5,tw:1.01,Ag:61.0,peso:47.9,Ix:7590,Sx:542,rx:11.1,Zx:632,Iy:364,Sy:61.2,ry:2.45,Zy:102.1},
+  "300": {h:30.0,bf:12.5,tf:1.62,hw:24.1,tw:1.08,Ag:69.0,peso:54.2,Ix:9800,Sx:653,rx:11.9,Zx:762,Iy:451,Sy:72.2,ry:2.56,Zy:120.6},
+  "320": {h:32.0,bf:13.1,tf:1.73,hw:25.8,tw:1.15,Ag:77.7,peso:61.0,Ix:12510,Sx:782,rx:12.7,Zx:914,Iy:555,Sy:84.7,ry:2.67,Zy:141.9},
+  "340": {h:34.0,bf:13.7,tf:1.83,hw:27.4,tw:1.22,Ag:86.7,peso:68.0,Ix:15700,Sx:923,rx:13.5,Zx:1080,Iy:674,Sy:98.4,ry:2.80,Zy:164.7},
+  "360": {h:36.0,bf:14.3,tf:1.95,hw:29.0,tw:1.30,Ag:97.0,peso:76.1,Ix:19610,Sx:1090,rx:14.2,Zx:1276,Iy:818,Sy:114,ry:2.90,Zy:191.9},
+  "380": {h:38.0,bf:14.9,tf:2.05,hw:30.6,tw:1.37,Ag:107,peso:84.0,Ix:24010,Sx:1260,rx:15.0,Zx:1482,Iy:975,Sy:131,ry:3.02,Zy:219.6},
+  "400": {h:40.0,bf:15.5,tf:2.16,hw:32.3,tw:1.44,Ag:118,peso:92.4,Ix:29210,Sx:1460,rx:15.7,Zx:1714,Iy:1160,Sy:149,ry:3.13,Zy:251.0},
+  "425": {h:42.5,bf:16.3,tf:2.30,hw:34.3,tw:1.53,Ag:132,peso:104,Ix:36970,Sx:1740,rx:16.7,Zx:2040,Iy:1440,Sy:176,ry:3.30,Zy:296.2},
+  "450": {h:45.0,bf:17.0,tf:2.43,hw:36.3,tw:1.62,Ag:147,peso:115,Ix:45850,Sx:2040,rx:17.7,Zx:2400,Iy:1730,Sy:203,ry:3.43,Zy:341.4},
+  "475": {h:47.5,bf:17.8,tf:2.56,hw:38.4,tw:1.71,Ag:163,peso:128,Ix:56480,Sx:2380,rx:18.6,Zx:2800,Iy:2090,Sy:235,ry:3.60,Zy:394.9},
+  "500": {h:50.0,bf:18.5,tf:2.70,hw:40.4,tw:1.80,Ag:179,peso:141,Ix:68740,Sx:2750,rx:19.6,Zx:3240,Iy:2480,Sy:268,ry:3.72,Zy:451.4},
+  "550": {h:55.0,bf:20.0,tf:3.00,hw:44.5,tw:1.90,Ag:212,peso:166,Ix:99180,Sx:3610,rx:21.6,Zx:4240,Iy:3490,Sy:349,ry:4.02,Zy:584.6},
+  "600": {h:60.0,bf:21.5,tf:3.24,hw:48.5,tw:2.16,Ag:254,peso:199,Ix:139000,Sx:4630,rx:23.4,Zx:5460,Iy:4670,Sy:434,ry:4.30,Zy:736.7},
+};
+const PERFILES = {IPN};
+const FY = {A36:25.3, F24:24.0, SAE1010:23.5};
+const E_AC = 21000;
+
+function poblarTamanos(){
+  const sel = document.getElementById('in_tamano');
+  sel.innerHTML = '';
+  Object.keys(IPN).forEach(t=>{
+    const o = document.createElement('option'); o.value=t; o.textContent='IPN '+t; sel.appendChild(o);
+  });
+}
+poblarTamanos();
+
+// ================= GEOMETRIA DERIVADA (J, Cw, ho, rts) =================
+function propiedades(perfil){
+  const p = Object.assign({}, perfil);
+  const ho = p.h - p.tf;
+  const Cw = p.Iy*ho*ho/4;
+  const J = (2*p.bf*Math.pow(p.tf,3) + p.hw*Math.pow(p.tw,3))/3;
+  const rts = Math.sqrt(Math.sqrt(p.Iy*Cw)/p.Sx);
+  p.ho=ho; p.Cw=Cw; p.J=J; p.rts=rts; p.A=p.Ag;
+  return p;
+}
+
+// ================= APOYOS =================
+function solicitaciones(tipo,q,L){
+  if(tipo==='art-art') return {Mu:q*L*L/8, Vu:q*L/2, deltaCoef:5/384};
+  if(tipo==='emp-emp') return {Mu:q*L*L/12, Vu:q*L/2, deltaCoef:1/384};
+  if(tipo==='emp-art') return {Mu:q*L*L/8, Vu:5*q*L/8, deltaCoef:1/185};
+  if(tipo==='voladizo') return {Mu:q*L*L/2, Vu:q*L, deltaCoef:1/8};
+  throw new Error('tipo de apoyo desconocido');
+}
+function flechaCalc(tipo,qServ,L,E,Ix){
+  const s = solicitaciones(tipo,qServ,L);
+  return s.deltaCoef*qServ*Math.pow(L,4)/(E*Ix);
+}
+
+// ================= COMPACIDAD =================
+function clasificarAla(bf,tf,Fy,E){
+  const lam=(bf/2)/tf, lamP=0.38*Math.sqrt(E/Fy), lamR=1.0*Math.sqrt(E/Fy);
+  const clase = lam<=lamP?'Compacta':(lam<=lamR?'No compacta':'Esbelta');
+  return {lam,lamP,lamR,clase};
+}
+function clasificarAlma(hw,tw,Fy,E){
+  const lam=hw/tw, lamP=3.76*Math.sqrt(E/Fy), lamR=5.70*Math.sqrt(E/Fy);
+  const clase = lam<=lamP?'Compacta':(lam<=lamR?'No compacta':'Esbelta');
+  return {lam,lamP,lamR,clase};
+}
+function clasificarSeccion(geo,Fy,E){
+  const ala=clasificarAla(geo.bf,geo.tf,Fy,E), alma=clasificarAlma(geo.hw,geo.tw,Fy,E);
+  const orden={'Compacta':0,'No compacta':1,'Esbelta':2};
+  const final = orden[ala.clase]>=orden[alma.clase]?ala.clase:alma.clase;
+  return {ala,alma,claseFinal:final};
+}
+
+// ================= FLEXION (CIRSOC 301-05 Cap. F) =================
+function verificarFlexion(Mu,geo,Fy,Lb,clase,E,Cb,phi){
+  Cb = Cb||1.0; phi = phi||0.9;
+  const Zx=geo.Zx, Sx=geo.Sx, ry=geo.ry, rts=geo.rts, J=geo.J, Cw=geo.Cw, ho=geo.ho;
+  const Mp = Fy*Zx;
+  if(clase.claseFinal !== 'Compacta'){
+    return {verifica:null, modo:'Seccion no compacta: requiere revision manual (Cap. F3-F5), no implementado'};
+  }
+  const Lp = 1.76*ry*Math.sqrt(E/Fy);
+  const term1 = (J*1.0)/(Sx*ho);
+  const Lr = 1.95*rts*(E/(0.7*Fy))*Math.sqrt(term1+Math.sqrt(term1*term1+6.76*Math.pow(0.7*Fy/E,2)));
+  let Mn, modo;
+  if(Lb<=Lp){ Mn=Mp; modo='Fluencia (Lb<=Lp)'; }
+  else if(Lb<=Lr){ Mn=Math.min(Cb*(Mp-(Mp-0.7*Fy*Sx)*(Lb-Lp)/(Lr-Lp)), Mp); modo='LTB inelastico (Lp<Lb<=Lr)'; }
+  else { const Fcr=(Cb*Math.PI*Math.PI*E)/Math.pow(Lb/rts,2)*Math.sqrt(1+0.078*(J/(Sx*ho))*Math.pow(Lb/rts,2)); Mn=Math.min(Fcr*Sx,Mp); modo='LTB elastico (Lb>Lr)'; }
+  const phiMn = phi*Mn, ratio = Mu/phiMn;
+  return {Mn,phiMn,ratio,verifica:Mu<=phiMn,modo,Lp,Lr,pct:ratio*100};
+}
+
+// ================= CORTE (Cap. G) =================
+function verificarCorte(Vu,geo,Fy,E,phi,kv){
+  phi=phi||0.9; kv=kv||5.0;
+  const hw=geo.hw, tw=geo.tw, Aw=hw*tw, lam=hw/tw;
+  const lim1=2.24*Math.sqrt(E/Fy), lim2=1.10*Math.sqrt(kv*E/Fy), lim3=1.37*Math.sqrt(kv*E/Fy);
+  let Cv, phiV;
+  if(lam<=lim1){Cv=1.0; phiV=1.0;}
+  else if(lam<=lim2){Cv=1.0; phiV=phi;}
+  else if(lam<=lim3){Cv=lim2/lam; phiV=phi;}
+  else {Cv=1.51*kv*E/(lam*lam*Fy); phiV=phi;}
+  const Vn=0.6*Fy*Aw*Cv, phiVn=phiV*Vn, ratio=Vu/phiVn;
+  return {Vn,phiVn,Cv,ratio,verifica:Vu<=phiVn,pct:ratio*100};
+}
+
+// ================= CALCULO COMPLETO DE VIGA =================
+function calcularViga(inp){
+  const perfilBase = PERFILES[inp.tipoPerfil][inp.tamano];
+  const geo = propiedades(perfilBase);
+  const Fy = FY[inp.acero];
+  const Lcm = inp.L*100;
+  const Lb = (inp.Lb ? inp.Lb : inp.L)*100;
+
+  const pesoKN = perfilBase.peso*9.81/1000;
+  const qDServ = inp.D*inp.b + pesoKN;
+  const qLServ = inp.Lc*inp.b;
+  const qServ = qDServ+qLServ;
+  const qu = 1.2*qDServ+1.6*qLServ;
+  const quCm = qu/100, qServCm = qServ/100;
+
+  const sol = solicitaciones(inp.apoyo, quCm, Lcm);
+  const clase = clasificarSeccion(geo, Fy, E_AC);
+  const flex = verificarFlexion(sol.Mu, geo, Fy, Lb, clase, E_AC);
+  const corte = verificarCorte(sol.Vu, geo, Fy, E_AC);
+  const fmax = flechaCalc(inp.apoyo, qServCm, Lcm, E_AC, geo.Ix);
+  const fadm = Lcm/inp.Lsobre;
+  const flecha = {fmax, fadm, ratio:fmax/fadm, verifica:fmax<=fadm, pct:fmax/fadm*100};
+
+  return {geo, Fy, qDServ, qLServ, qServ, qu, Mu:sol.Mu, Vu:sol.Vu, clase, flex, corte, flecha, Lcm, Lb};
+}
+
+function leerInputs(){
+  return {
+    L: parseFloat(document.getElementById('in_L').value),
+    b: parseFloat(document.getElementById('in_b').value),
+    apoyo: document.getElementById('in_apoyo').value,
+    Lb: document.getElementById('in_Lb').value ? parseFloat(document.getElementById('in_Lb').value) : null,
+    D: parseFloat(document.getElementById('in_D').value),
+    Lc: parseFloat(document.getElementById('in_Lc').value),
+    Lsobre: parseFloat(document.getElementById('in_Lsobre').value),
+    acero: document.getElementById('in_acero').value,
+    tipoPerfil: 'IPN',
+    tamano: document.getElementById('in_tamano').value,
+  };
+}
+
+function fmt(x,d){ d = d===undefined?1:d; return Number(x).toLocaleString('es-AR',{minimumFractionDigits:d,maximumFractionDigits:d}); }
+
+function metricClass(ok){ return ok===null? 'vv-warn' : (ok? 'vv-ok':'vv-bad'); }
+function metricLabel(ok){ return ok===null? 'A revisar' : (ok? 'Verifica':'No verifica'); }
+
+function deformadaPath(apoyo, ampPx){
+  // formas normalizadas (esquematicas, no exactas) para cada condicion de apoyo
+  const N=24, pts=[];
+  for(let i=0;i<=N;i++){
+    const x=i/N; let y;
+    if(apoyo==='art-art') y = x*(1-x*x*2+x*x*x) * (1); // aprox simetrica, pico centro
+    else if(apoyo==='emp-emp') y = (x*x*(1-x)*(1-x))*4;
+    else if(apoyo==='emp-art') y = (x*x*(1-x))*2.6;
+    else y = (x*x*(3-x))/2; // voladizo, x de 0(fijo) a 1(libre)
+    pts.push(y);
+  }
+  const maxY = Math.max(...pts) || 1;
+  return pts.map(y=> (y/maxY)*ampPx );
+}
+
+function beamSVG(apoyo, fmaxCm){
+  const W=680,H=220, x0=70,x1=610, yBeam=70, ampPx=45;
+  const ys = deformadaPath(apoyo, ampPx);
+  const N = ys.length-1;
+  let path='';
+  for(let i=0;i<=N;i++){
+    const x = x0 + (x1-x0)*i/N;
+    const y = yBeam + 55 + ys[i];
+    path += (i===0?'M':'L') + x.toFixed(1) + ' ' + y.toFixed(1) + ' ';
+  }
+  let supportsLeft='', supportsRight='';
+  const pinTriangle = (cx,cy)=>`<polygon points="${cx},${cy} ${cx-15},${cy+28} ${cx+15},${cy+28}" fill="none" stroke="#1a1a18" stroke-width="1"/><line x1="${cx-20}" y1="${cy+28}" x2="${cx+20}" y2="${cy+28}" stroke="#1a1a18" stroke-width="1"/>`;
+  const roller = (cx,cy)=>`<circle cx="${cx}" cy="${cy+8}" r="7" fill="none" stroke="#1a1a18" stroke-width="1"/><line x1="${cx-18}" y1="${cy+28}" x2="${cx+18}" y2="${cy+28}" stroke="#1a1a18" stroke-width="1"/>`;
+  const wall = (cx,cy)=>`<line x1="${cx}" y1="${cy-30}" x2="${cx}" y2="${cy+30}" stroke="#1a1a18" stroke-width="3"/>`;
+
+  if(apoyo==='art-art'){ supportsLeft=pinTriangle(x0,yBeam); supportsRight=roller(x1,yBeam); }
+  else if(apoyo==='emp-emp'){ supportsLeft=wall(x0,yBeam); supportsRight=wall(x1,yBeam); }
+  else if(apoyo==='emp-art'){ supportsLeft=wall(x0,yBeam); supportsRight=roller(x1,yBeam); }
+  else { supportsLeft=wall(x0,yBeam); supportsRight=''; }
+
+  return `<svg width="100%" viewBox="0 0 ${W} ${H}" role="img" style="margin-top:10px;">
+    <title>Esquema de la viga y su deformada</title>
+    <line x1="${x0}" y1="${yBeam}" x2="${x1}" y2="${yBeam}" stroke="#1a1a18" stroke-width="3" stroke-linecap="round"/>
+    ${supportsLeft}${supportsRight}
+    <path d="${path}" fill="none" stroke="#D85A30" stroke-width="2" stroke-dasharray="4 4"/>
+    <line x1="${x0}" y1="${yBeam+55}" x2="${x1}" y2="${yBeam+55}" stroke="#ccc" stroke-width="0.5" stroke-dasharray="2 3"/>
+    <text x="${(x0+x1)/2}" y="${H-14}" text-anchor="middle" font-size="12" fill="#8a887f">deformada esquem&aacute;tica &middot; f max = ${fmt(fmaxCm,2)} cm</text>
+  </svg>`;
+}
+
+function renderDashboard(r, inp){
+
+  const claseTxt = r.clase.claseFinal;
+  const flexOk = r.flex.verifica, corteOk = r.corte.verifica, flechaOk = r.flecha.verifica;
+
+  let html = `<div class="vv-card">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
+      <div>
+        <div style="font-size:17px;font-weight:600;">${inp.tipoPerfil} ${inp.tamano} &middot; L=${fmt(inp.L,2)} m &middot; ${inp.apoyo}</div>
+        <div style="font-size:12px;color:#8a887f;">Lb=${fmt(inp.Lb?inp.Lb:inp.L,2)} m &middot; acero ${inp.acero} &middot; qu=${fmt(r.qu,2)} kN/m &middot; qserv=${fmt(r.qServ,2)} kN/m</div>
+      </div>
+      <div style="font-size:12px;padding:4px 10px;border-radius:8px;background:${claseTxt==='Compacta'?'#eef3e8':'#f4e6d8'};color:${claseTxt==='Compacta'?'#2f5d1f':'#8a5a1f'};">${claseTxt}</div>
+    </div>
+
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;">
+      <div class="vv-metric ${metricClass(flexOk)}">
+        <div class="lbl">Flexi&oacute;n</div>
+        <div class="val">${r.flex.pct!==undefined? fmt(r.flex.pct,0)+'%':'&mdash;'}</div>
+        <div class="st">${metricLabel(flexOk)}</div>
+      </div>
+      <div class="vv-metric ${metricClass(corteOk)}">
+        <div class="lbl">Corte</div>
+        <div class="val">${fmt(r.corte.pct,0)}%</div>
+        <div class="st">${metricLabel(corteOk)}</div>
+      </div>
+      <div class="vv-metric ${metricClass(flechaOk)}">
+        <div class="lbl">Flecha</div>
+        <div class="val">${fmt(r.flecha.pct,0)}%</div>
+        <div class="st">${metricLabel(flechaOk)}</div>
+      </div>
+    </div>
+
+    <div style="margin-top:10px;font-size:12px;color:#8a887f;">
+      Compacidad &mdash; ala: ${r.clase.ala.clase} (&lambda;=${fmt(r.clase.ala.lam,1)}, &lambda;p=${fmt(r.clase.ala.lamP,1)}) &middot;
+      alma: ${r.clase.alma.clase} (&lambda;=${fmt(r.clase.alma.lam,1)}, &lambda;p=${fmt(r.clase.alma.lamP,1)})
+      ${r.flex.modo? '<br>Flexi&oacute;n: '+r.flex.modo : ''}
+    </div>
+
+    ${beamSVG(inp.apoyo, r.flecha.fmax)}
+  </div>`;
+
+  document.getElementById('dashboard').innerHTML = html;
+}
+
+function calcularYMostrar(){
+  const inp = leerInputs();
+  const r = calcularViga(inp);
+  renderDashboard(r, inp);
+  document.getElementById('tabla_optimo').innerHTML = '';
+}
+
+function buscarOptimo(){
+  const inp = leerInputs();
+  const candidatos = [];
+  ['IPN'].forEach(tipo=>{
+    Object.keys(PERFILES[tipo]).forEach(tam=>{
+      candidatos.push({tipo, tam, peso:PERFILES[tipo][tam].peso});
+    });
+  });
+  candidatos.sort((a,b)=>a.peso-b.peso);
+
+  let encontrado = null;
+  const intentos = [];
+  for(const c of candidatos){
+    const inp2 = Object.assign({}, inp, {tipoPerfil:c.tipo, tamano:c.tam});
+    const r = calcularViga(inp2);
+    const compacta = r.clase.claseFinal==='Compacta';
+    const flexOk = r.flex.verifica===true;
+    const corteOk = r.corte.verifica;
+    const flechaOk = r.flecha.verifica;
+    const todoOk = compacta && flexOk && corteOk && flechaOk;
+    intentos.push({perfil:c.tipo+' '+c.tam, peso:c.peso, compacta, flexPct:r.flex.pct, cortePct:r.corte.pct, flechaPct:r.flecha.pct, todoOk});
+    if(todoOk && !encontrado){ encontrado = {c, r, inp2}; break; }
+  }
+
+  if(encontrado){
+    document.getElementById('in_tipo').value = encontrado.c.tipo;
+    poblarTamanos();
+    document.getElementById('in_tamano').value = encontrado.c.tam;
+    renderDashboard(encontrado.r, encontrado.inp2);
+  } else {
+    document.getElementById('dashboard').innerHTML = '<div class="vv-card">Ning&uacute;n perfil de la lista verific&oacute; todas las condiciones.</div>';
+  }
+
+  let tabla = `<div class="vv-card"><h2 class="vv-h">Perfiles evaluados (ordenados por peso)</h2>
+    <table class="vv-t"><tr><th>Perfil</th><th>kg/m</th><th>Compacta</th><th>Flexi&oacute;n %</th><th>Corte %</th><th>Flecha %</th></tr>`;
+  intentos.forEach(i=>{
+    tabla += `<tr class="${i.todoOk?'vv-t-ok':''}"><td>${i.perfil}</td><td>${fmt(i.peso,1)}</td><td>${i.compacta?'si':'no'}</td>
+      <td>${i.flexPct!==undefined?fmt(i.flexPct,0):'-'}</td><td>${fmt(i.cortePct,0)}</td><td>${fmt(i.flechaPct,0)}</td></tr>`;
+    if(i.todoOk) return;
+  });
+  tabla += '</table></div>';
+  document.getElementById('tabla_optimo').innerHTML = tabla;
+}
+
+calcularYMostrar();
+</script>
+</div>
