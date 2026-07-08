@@ -352,8 +352,6 @@ function buscarOptimo(){
   }
 
   if(encontrado){
-    document.getElementById('in_tipo').value = encontrado.c.tipo;
-    poblarTamanos();
     document.getElementById('in_tamano').value = encontrado.c.tam;
     renderDashboard(encontrado.r, encontrado.inp2);
   } else {
@@ -374,3 +372,4 @@ function buscarOptimo(){
 calcularYMostrar();
 </script>
 </div>
+
