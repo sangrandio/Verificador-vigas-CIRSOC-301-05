@@ -39,4 +39,4 @@ MIT — libre para usar, modificar y compartir.
 
 ## Autor
 
-Baleal Ingeniería
+Santiago Grandio 
