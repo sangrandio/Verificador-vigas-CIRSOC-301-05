@@ -18,7 +18,7 @@ A partir de los datos de la viga (cargas, ancho de influencia, tipo de apoyo, pe
 
 ## Cómo usarlo
 
-Abrí [`verificador_vigas.html`](./verificador_vigas.html) con doble clic, o entrá directo por GitHub Pages: `https://<tu-usuario>.github.io/<nombre-repo>/verificador_vigas.html`
+Abrí https://sangrandio.github.io/Verificador-vigas-CIRSOC-301-05/
 
 No requiere instalar nada ni tener conexión a internet una vez descargado.
 
