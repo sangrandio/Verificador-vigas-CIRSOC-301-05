@@ -42,6 +42,12 @@
       </select>
     </div>
     <div class="vv-field"><label>Lb no arriostrada (m)</label><input type="number" id="in_Lb" value="" step="0.01" placeholder="= L si vac&iacute;o"></div>
+    <div class="vv-field"><label>Posici&oacute;n de la carga</label>
+      <select id="in_posicion">
+        <option value="alma">Alma / ala inferior</option>
+        <option value="ala_superior">Ala superior</option>
+      </select>
+    </div>
   </div>
 
   <div class="vv-input-row">
@@ -101,6 +107,7 @@ const IPN = {
 const PERFILES = {IPN};
 const FY = {A36:25.3, F24:24.0, SAE1010:23.5};
 const E_AC = 21000;
+const G_AC = 8100;
 
 function poblarTamanos(){
   const sel = document.getElementById('in_tamano');
@@ -154,36 +161,62 @@ function clasificarSeccion(geo,Fy,E){
 }
 
 // ================= FLEXION (CIRSOC 301-05 Cap. F) =================
-function verificarFlexion(Mu,geo,Fy,Lb,clase,E,Cb,phi){
-  Cb = Cb||1.0; phi = phi||0.9;
-  const Zx=geo.Zx, Sx=geo.Sx, ry=geo.ry, rts=geo.rts, J=geo.J, Cw=geo.Cw, ho=geo.ho;
+function verificarFlexion(Mu,geo,Fy,Lb,clase,E,G,Cb,posicion){
+  Cb = Cb||1.0;
+  const phi = 0.9;
+  const Sx=geo.Sx, ry=geo.ry, Iy=geo.Iy, Cw=geo.Cw, J=geo.J, A=geo.A, Zx=geo.Zx;
   const Mp = Fy*Zx;
   if(clase.claseFinal !== 'Compacta'){
-    return {verifica:null, modo:'Seccion no compacta: requiere revision manual (Cap. F3-F5), no implementado'};
+    return {verifica:null, modo:'Seccion no compacta: requiere revision manual (Apendice F), no implementado'};
   }
-  const Lp = 1.76*ry*Math.sqrt(E/Fy);
-  const term1 = (J*1.0)/(Sx*ho);
-  const Lr = 1.95*rts*(E/(0.7*Fy))*Math.sqrt(term1+Math.sqrt(term1*term1+6.76*Math.pow(0.7*Fy/E,2)));
+
+  const Fr = 6.9; // kN/cm2 (69 MPa, perfil laminado)
+  const FL = Fy - Fr; // seccion homogenea: FL = min(Fyf-Fr, Fyw) = Fyf-Fr
+
+  const cargaSuperior = (posicion === 'ala_superior');
+  const Lp = (cargaSuperior? 1.59 : 1.76) * ry * Math.sqrt(E/Fy);
+
+  const X1 = (Math.PI/Sx)*Math.sqrt(E*G*J*A/2);
+  const X2 = 4*(Cw/Iy)*Math.pow(Sx/(G*J),2);
+
+  let Lr;
+  if(cargaSuperior) Lr = 1.28*ry*(X1/FL);                                    // F.1.6.a
+  else Lr = (ry*X1/FL)*Math.sqrt(1+Math.sqrt(1+X2*FL*FL));                    // F.1.6
+
+  const Mr = FL*Sx; // F.1.7 / F.1.7.a (misma expresion en ambos casos)
+
   let Mn, modo;
   if(Lb<=Lp){ Mn=Mp; modo='Fluencia (Lb<=Lp)'; }
-  else if(Lb<=Lr){ Mn=Math.min(Cb*(Mp-(Mp-0.7*Fy*Sx)*(Lb-Lp)/(Lr-Lp)), Mp); modo='LTB inelastico (Lp<Lb<=Lr)'; }
-  else { const Fcr=(Cb*Math.PI*Math.PI*E)/Math.pow(Lb/rts,2)*Math.sqrt(1+0.078*(J/(Sx*ho))*Math.pow(Lb/rts,2)); Mn=Math.min(Fcr*Sx,Mp); modo='LTB elastico (Lb>Lr)'; }
+  else if(Lb<=Lr){
+    Mn = Math.min(Cb*(Mp-(Mp-Mr)*(Lb-Lp)/(Lr-Lp)), Mp);                      // F.1.2
+    modo='Pandeo lateral-torsional inelastico (Lp<Lb<=Lr)';
+  } else {
+    let Mcr;
+    if(cargaSuperior) Mcr = 1.28*Cb*Sx*X1*ry/Lb;                             // F.1.13.a
+    else Mcr = Cb*(Math.PI/Lb)*Math.sqrt(E*Iy*G*J + Math.pow(Math.PI*E/Lb,2)*Iy*Cw); // F.1.13
+    Mn = Math.min(Mcr, Mp);
+    modo='Pandeo lateral-torsional elastico (Lb>Lr)';
+  }
+
   const phiMn = phi*Mn, ratio = Mu/phiMn;
   return {Mn,phiMn,ratio,verifica:Mu<=phiMn,modo,Lp,Lr,pct:ratio*100};
 }
 
 // ================= CORTE (Cap. G) =================
-function verificarCorte(Vu,geo,Fy,E,phi,kv){
-  phi=phi||0.9; kv=kv||5.0;
-  const hw=geo.hw, tw=geo.tw, Aw=hw*tw, lam=hw/tw;
-  const lim1=2.24*Math.sqrt(E/Fy), lim2=1.10*Math.sqrt(kv*E/Fy), lim3=1.37*Math.sqrt(kv*E/Fy);
-  let Cv, phiV;
-  if(lam<=lim1){Cv=1.0; phiV=1.0;}
-  else if(lam<=lim2){Cv=1.0; phiV=phi;}
-  else if(lam<=lim3){Cv=lim2/lam; phiV=phi;}
-  else {Cv=1.51*kv*E/(lam*lam*Fy); phiV=phi;}
-  const Vn=0.6*Fy*Aw*Cv, phiVn=phiV*Vn, ratio=Vu/phiVn;
-  return {Vn,phiVn,Cv,ratio,verifica:Vu<=phiVn,pct:ratio*100};
+function verificarCorte(Vu,geo,Fy,E){
+  const phi = 0.9; // F.2.2: siempre 0,90, sin excepcion por esbeltez
+  const h=geo.h, hw=geo.hw, tw=geo.tw;
+  const Aw = h*tw;      // F.2.1: area del alma = altura TOTAL x espesor
+  const lam = hw/tw;    // esbeltez con la altura libre del alma
+
+  const lim1=2.45*Math.sqrt(E/Fy), lim2=3.07*Math.sqrt(E/Fy);
+  let Vn;
+  if(lam<=lim1) Vn = 0.6*Fy*Aw;                              // F.2.1
+  else if(lam<=lim2) Vn = 0.6*Fy*Aw*(lim1/lam);              // F.2.2
+  else Vn = 4.52*E*Aw/(lam*lam);                              // F.2.3 (valido hasta hw/tw<=260)
+
+  const phiVn = phi*Vn, ratio = Vu/phiVn;
+  return {Vn,phiVn,ratio,verifica:Vu<=phiVn,pct:ratio*100, fueraDeRango: lam>260};
 }
 
 // ================= CALCULO COMPLETO DE VIGA =================
@@ -203,7 +236,7 @@ function calcularViga(inp){
 
   const sol = solicitaciones(inp.apoyo, quCm, Lcm);
   const clase = clasificarSeccion(geo, Fy, E_AC);
-  const flex = verificarFlexion(sol.Mu, geo, Fy, Lb, clase, E_AC);
+  const flex = verificarFlexion(sol.Mu, geo, Fy, Lb, clase, E_AC, G_AC, 1.0, inp.posicion);
   const corte = verificarCorte(sol.Vu, geo, Fy, E_AC);
   const fmax = flechaCalc(inp.apoyo, qServCm, Lcm, E_AC, geo.Ix);
   const fadm = Lcm/inp.Lsobre;
@@ -218,6 +251,7 @@ function leerInputs(){
     b: parseFloat(document.getElementById('in_b').value),
     apoyo: document.getElementById('in_apoyo').value,
     Lb: document.getElementById('in_Lb').value ? parseFloat(document.getElementById('in_Lb').value) : null,
+    posicion: document.getElementById('in_posicion').value,
     D: parseFloat(document.getElementById('in_D').value),
     Lc: parseFloat(document.getElementById('in_Lc').value),
     Lsobre: parseFloat(document.getElementById('in_Lsobre').value),
