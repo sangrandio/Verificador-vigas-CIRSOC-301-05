@@ -330,22 +330,24 @@ function beamSVG(apoyo, fmaxCm){
   </svg>`;
 }
 
+function fmtM(kNcm, d){ return fmt(kNcm/100, d===undefined?1:d) + ' kN.m'; }
+
 function detalleFlexion(f){
   if(f.verifica===null) return `<div style="font-size:12.5px;line-height:1.7;">${f.modo}</div>`;
   const filas = [
     ['<b>Plastificaci&oacute;n</b> (F.1.1)', ''],
-    ['My = Fy&middot;Sx', fmt(f.My,0)+' kN.cm'],
-    ['Mp = Fy&middot;Zx' + (f.topeMp? ' &nbsp;(topeado a 1,5&middot;My)':''), fmt(f.Mp,0)+' kN.cm'],
-    ['Mp &le; 1,5&middot;My', (f.Mp_sinTope<=1.5*f.My?'Verifica':'Se aplica tope') + ` (1,5My=${fmt(1.5*f.My,0)})`],
+    ['My = Fy&middot;Sx', fmtM(f.My)],
+    ['Mp = Fy&middot;Zx' + (f.topeMp? ' &nbsp;(topeado a 1,5&middot;My)':''), fmtM(f.Mp)],
+    ['Mp &le; 1,5&middot;My', (f.Mp_sinTope<=1.5*f.My?'Verifica':'Se aplica tope') + ` (1,5My=${fmtM(1.5*f.My)})`],
     ['<b>Pandeo lateral-torsional</b> (F.1.2)', ''],
     ['Lb', fmt(f.Lb/100,2)+' m'],
     ['Lp', fmt(f.Lp/100,2)+' m'],
     ['Lb &le; Lp&nbsp;? (PLT)', f.Lb<=f.Lp? 'S&iacute; &mdash; no gobierna PLT, Mn=Mp' : 'No &mdash; gobierna PLT'],
     ['Lr', fmt(f.Lr/100,2)+' m'],
     ['Modo gobernante', f.modo],
-    ['Mn (nominal)', fmt(f.Mn,0)+' kN.cm'],
-    ['&phi;b&middot;Mn = Rd', fmt(f.phiMn,0)+' kN.cm'],
-    ['Mu (solicitante)', fmt(f.Mu,0)+' kN.cm'],
+    ['Mn (nominal)', fmtM(f.Mn)],
+    ['&phi;b&middot;Mn = Rd', fmtM(f.phiMn)],
+    ['Mu (solicitante)', fmtM(f.Mu)],
     ['Mu &le; &phi;b&middot;Mn&nbsp;?', f.verifica? 'Verifica':'No verifica'],
   ];
   return '<table class="vv-t" style="font-size:12.5px;">' + filas.map(([a,b])=>
