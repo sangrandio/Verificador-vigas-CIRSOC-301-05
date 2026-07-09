@@ -16,6 +16,10 @@
   .vv-ok{background:#e8f3e3;} .vv-ok .lbl,.vv-ok .val,.vv-ok .st{color:#2f5d1f;}
   .vv-bad{background:#fbe9e6;} .vv-bad .lbl,.vv-bad .val,.vv-bad .st{color:#8a2c1f;}
   .vv-warn{background:#f4f1e8;} .vv-warn .lbl,.vv-warn .val,.vv-warn .st{color:#5b5952;}
+  .vv-verver{margin-top:8px;padding:4px 10px;font-size:11.5px;border:1px solid currentColor;border-radius:6px;background:transparent;cursor:pointer;opacity:0.75;}
+  .vv-verver:hover{opacity:1;}
+  .vv-detalle{background:#fafaf7;border:1px solid #e5e3da;border-radius:10px;padding:10px 12px;}
+  .vv-detalle table.vv-t td{padding:3px 6px;}
   h1.vv-h{font-size:20px;font-weight:600;margin:0 0 4px;}
   h2.vv-h{font-size:15px;font-weight:600;margin:0 0 10px;}
   table.vv-t{width:100%;border-collapse:collapse;font-size:13px;}
@@ -25,7 +29,8 @@
 </style>
 
 <h1 class="vv-h">Verificador de vigas de acero IPN &mdash; CIRSOC 301-05</h1>
-<p style="font-size:13px;color:#8a887f;margin:0 0 1.25rem;">Herramienta de uso interno &middot; Baleal Ingenier&iacute;a. Perfiles IPN con datos oficiales CIRSOC/IRAM. Solo perfiles compactos.</p>
+<p style="font-size:13px;color:#8a887f;margin:0 0 0.4rem;">Herramienta de c&oacute;digo abierto &middot; Baleal Ingenier&iacute;a. Perfiles IPN con datos oficiales CIRSOC/IRAM-IAS 301-05. Solo perfiles compactos.</p>
+<p style="font-size:12px;color:#a8a69c;margin:0 0 1.25rem;">Uso bajo criterio profesional &mdash; no reemplaza la verificaci&oacute;n de un ingeniero matriculado.</p>
 
 <div class="vv-card" style="margin-bottom:1rem;">
   <h2 class="vv-h">Datos de entrada</h2>
@@ -106,8 +111,8 @@ const IPN = {
 };
 const PERFILES = {IPN};
 const FY = {A36:25.3, F24:24.0, SAE1010:23.5};
-const E_AC = 21000;
-const G_AC = 8100;
+const E_AC = 20000;  // kN/cm2 (200.000 MPa, valor exacto exigido por CIRSOC 301-05)
+const G_AC = 7720;   // kN/cm2 (77.200 MPa, idem)
 
 function poblarTamanos(){
   const sel = document.getElementById('in_tamano');
@@ -165,7 +170,10 @@ function verificarFlexion(Mu,geo,Fy,Lb,clase,E,G,Cb,posicion){
   Cb = Cb||1.0;
   const phi = 0.9;
   const Sx=geo.Sx, ry=geo.ry, Iy=geo.Iy, Cw=geo.Cw, J=geo.J, A=geo.A, Zx=geo.Zx;
-  const Mp = Fy*Zx;
+  const My = Fy*Sx;                    // F.1.1: momento elastico
+  const Mp_sinTope = Fy*Zx;
+  const Mp = Math.min(Mp_sinTope, 1.5*My);  // F.1.1: Mp = Fy*Z <= 1.5*My
+  const topeMp = Mp_sinTope > 1.5*My;
   if(clase.claseFinal !== 'Compacta'){
     return {verifica:null, modo:'Seccion no compacta: requiere revision manual (Apendice F), no implementado'};
   }
@@ -199,7 +207,8 @@ function verificarFlexion(Mu,geo,Fy,Lb,clase,E,G,Cb,posicion){
   }
 
   const phiMn = phi*Mn, ratio = Mu/phiMn;
-  return {Mn,phiMn,ratio,verifica:Mu<=phiMn,modo,Lp,Lr,pct:ratio*100};
+  return {Mn,phiMn,ratio,verifica:Mu<=phiMn,modo,Lp,Lr,pct:ratio*100,
+          My, Mp_sinTope, Mp, topeMp, Mr, Mu, Lb, phi};
 }
 
 // ================= CORTE (Cap. G) =================
@@ -321,6 +330,57 @@ function beamSVG(apoyo, fmaxCm){
   </svg>`;
 }
 
+function detalleFlexion(f){
+  if(f.verifica===null) return `<div style="font-size:12.5px;line-height:1.7;">${f.modo}</div>`;
+  const filas = [
+    ['<b>Plastificaci&oacute;n</b> (F.1.1)', ''],
+    ['My = Fy&middot;Sx', fmt(f.My,0)+' kN.cm'],
+    ['Mp = Fy&middot;Zx' + (f.topeMp? ' &nbsp;(topeado a 1,5&middot;My)':''), fmt(f.Mp,0)+' kN.cm'],
+    ['Mp &le; 1,5&middot;My', (f.Mp_sinTope<=1.5*f.My?'Verifica':'Se aplica tope') + ` (1,5My=${fmt(1.5*f.My,0)})`],
+    ['<b>Pandeo lateral-torsional</b> (F.1.2)', ''],
+    ['Lb', fmt(f.Lb/100,2)+' m'],
+    ['Lp', fmt(f.Lp/100,2)+' m'],
+    ['Lb &le; Lp&nbsp;? (PLT)', f.Lb<=f.Lp? 'S&iacute; &mdash; no gobierna PLT, Mn=Mp' : 'No &mdash; gobierna PLT'],
+    ['Lr', fmt(f.Lr/100,2)+' m'],
+    ['Modo gobernante', f.modo],
+    ['Mn (nominal)', fmt(f.Mn,0)+' kN.cm'],
+    ['&phi;b&middot;Mn = Rd', fmt(f.phiMn,0)+' kN.cm'],
+    ['Mu (solicitante)', fmt(f.Mu,0)+' kN.cm'],
+    ['Mu &le; &phi;b&middot;Mn&nbsp;?', f.verifica? 'Verifica':'No verifica'],
+  ];
+  return '<table class="vv-t" style="font-size:12.5px;">' + filas.map(([a,b])=>
+    `<tr><td style="text-align:left;color:#5b5952;">${a}</td><td>${b}</td></tr>`).join('') + '</table>';
+}
+
+function detalleCorte(c, Vu){
+  const filas = [
+    ['Vn (nominal)', fmt(c.Vn,0)+' kN'],
+    ['&phi;v&middot;Vn = Rd', fmt(c.phiVn,0)+' kN'],
+    ['Vu (solicitante)', fmt(Vu,0)+' kN'],
+    ['Vu &le; &phi;v&middot;Vn&nbsp;?', c.verifica? 'Verifica':'No verifica'],
+  ];
+  return '<table class="vv-t" style="font-size:12.5px;">' + filas.map(([a,b])=>
+    `<tr><td style="text-align:left;color:#5b5952;">${a}</td><td>${b}</td></tr>`).join('') + '</table>';
+}
+
+function detalleFlecha(d, qServ, Lcm, Ix){
+  const filas = [
+    ['f max = 5&middot;qserv&middot;L&sup4; / (384&middot;E&middot;Ix)', fmt(d.fmax,3)+' cm'],
+    ['f adm = L / xxx', fmt(d.fadm,3)+' cm'],
+    ['qserv', fmt(qServ/100,4)+' kN/cm'],
+    ['L', fmt(Lcm,1)+' cm'],
+    ['Ix', fmt(Ix,0)+' cm&#8308;'],
+    ['f max &le; f adm&nbsp;?', d.verifica? 'Verifica':'No verifica'],
+  ];
+  return '<table class="vv-t" style="font-size:12.5px;">' + filas.map(([a,b])=>
+    `<tr><td style="text-align:left;color:#5b5952;">${a}</td><td>${b}</td></tr>`).join('') + '</table>';
+}
+
+function toggleValores(id){
+  const el = document.getElementById(id);
+  el.style.display = (el.style.display==='none' || el.style.display==='')? 'block':'none';
+}
+
 function renderDashboard(r, inp){
 
   const claseTxt = r.clase.claseFinal;
@@ -340,17 +400,26 @@ function renderDashboard(r, inp){
         <div class="lbl">Flexi&oacute;n</div>
         <div class="val">${r.flex.pct!==undefined? fmt(r.flex.pct,0)+'%':'&mdash;'}</div>
         <div class="st">${metricLabel(flexOk)}</div>
+        <button class="vv-verver" onclick="toggleValores('det-flex')">Ver valores</button>
       </div>
       <div class="vv-metric ${metricClass(corteOk)}">
         <div class="lbl">Corte</div>
         <div class="val">${fmt(r.corte.pct,0)}%</div>
         <div class="st">${metricLabel(corteOk)}</div>
+        <button class="vv-verver" onclick="toggleValores('det-corte')">Ver valores</button>
       </div>
       <div class="vv-metric ${metricClass(flechaOk)}">
         <div class="lbl">Flecha</div>
         <div class="val">${fmt(r.flecha.pct,0)}%</div>
         <div class="st">${metricLabel(flechaOk)}</div>
+        <button class="vv-verver" onclick="toggleValores('det-flecha')">Ver valores</button>
       </div>
+    </div>
+
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-top:8px;">
+      <div id="det-flex" class="vv-detalle" style="display:none;">${detalleFlexion(r.flex)}</div>
+      <div id="det-corte" class="vv-detalle" style="display:none;">${detalleCorte(r.corte, r.Vu)}</div>
+      <div id="det-flecha" class="vv-detalle" style="display:none;">${detalleFlecha(r.flecha, r.qServ, r.Lcm, r.geo.Ix)}</div>
     </div>
 
     <div style="margin-top:10px;font-size:12px;color:#8a887f;">
@@ -416,5 +485,3 @@ function buscarOptimo(){
 calcularYMostrar();
 </script>
 </div>
-
-
